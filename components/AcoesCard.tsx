@@ -1,138 +1,137 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { SetStateAction, useEffect, useState } from "react";
-import axios from "axios";
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
-import { Sparklines, SparklinesLine } from "react-sparklines";
+import { useEffect, useState } from "react";
 
-import { useCallback } from "react";
 type Acao = {
-    symbol: string;
-    longName: string;
-    regularMarketPrice: number;
-    currency: string;
-    regularMarketPreviousClose: number;
-    sparkline?: number[]; // valores simulados para o mini gráfico
+  symbol: string;
+  description: string;
+  currentPrice: number;
+  previousClose: number;
+  currency: string;
+};
+
+type CotasSalvas = {
+  [symbol: string]: number;
 };
 
 export default function AcoesCard() {
-    const [acoes, setAcoes] = useState<Acao[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [filtro, setFiltro] = useState("");
-    const [ultimaAtualizacao, setUltimaAtualizacao] = useState("");
+  const [acoes, setAcoes] = useState<Acao[]>([]);
+  const [cotas, setCotas] = useState<CotasSalvas>({});
+  const [carregado, setCarregado] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
-
-
-    const fetchAcoes = useCallback(async () => {
-        try {
-            const res = await axios.get("/api/acoes");
-            const dados = res.data.map((acao: Acao) => ({
-                ...acao,
-                sparkline: gerarSparkline(acao.regularMarketPreviousClose, acao.regularMarketPrice),
-            }));
-            setAcoes(dados);
-            const agora = new Date();
-            setUltimaAtualizacao(
-                agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-            );
-        } catch (error) {
-            console.error("Erro ao buscar ação:", error);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    const gerarSparkline = (start: number, end: number): number[] => {
-        const steps = 10;
-        const values = [];
-        for (let i = 0; i < steps; i++) {
-            values.push(start + ((end - start) * i) / steps + Math.random() * 0.5);
-        }
-        values.push(end);
-        return values;
-    };
-
-    useEffect(() => {
-        fetchAcoes();
-        const interval = setInterval(fetchAcoes, 120000);
-        return () => clearInterval(interval);
-    }, [fetchAcoes]);
-
-    const acoesFiltradas = acoes.filter((acao) =>
-        `${acao.longName} ${acao.symbol}`.toLowerCase().includes(filtro.toLowerCase())
-    );
-
-    if (loading) {
-        return (
-            <div className="p-4 text-center text-gray-600 dark:text-gray-300">
-                <p className="animate-pulse">Carregando cotações...</p>
-            </div>
-        );
+  useEffect(() => {
+    const cotasSalvas = localStorage.getItem("cotas");
+    if (cotasSalvas) {
+      setCotas(JSON.parse(cotasSalvas));
     }
+    setCarregado(true);
+  }, []);
 
-    return (
-        <div className="p-4 space-y-4">
-            <div className="flex justify-between items-center flex-wrap gap-2">
+  async function fetchAcoes() {
+    try {
+      setCarregando(true);
+      const res = await fetch("/api/acoes");
+      if (!res.ok) throw new Error("Erro ao buscar ações");
+      const data: Acao[] = await res.json();
+      setAcoes(data);
+      setErro(null);
+    } catch (error) {
+      setErro("Erro ao buscar ações");
+      console.error(error);
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  function handleCotaChange(symbol: string, valor: string) {
+    const quantidade = parseFloat(valor);
+    const novasCotas = {
+      ...cotas,
+      [symbol]: isNaN(quantidade) ? 0 : quantidade,
+    };
+    setCotas(novasCotas);
+    localStorage.setItem("cotas", JSON.stringify(novasCotas));
+  }
+
+  function limparCota(symbol: string) {
+    const novasCotas = { ...cotas };
+    delete novasCotas[symbol];
+    setCotas(novasCotas);
+    localStorage.setItem("cotas", JSON.stringify(novasCotas));
+  }
+
+  if (!carregado) return null;
+  if (carregando) return <p>Carregando ações...</p>;
+  if (erro) return <p className="text-red-600">{erro}</p>;
+
+  return (
+    <div className="p-4">
+      <button
+        onClick={fetchAcoes}
+        className="mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        Atualizar Ações
+      </button>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {acoes.map((acao) => {
+          const cota = cotas[acao.symbol] || 0;
+          const total = cota * acao.currentPrice;
+          const variacao = acao.currentPrice - acao.previousClose;
+          const ganhoPerda = cota * variacao;
+
+          return (
+            <div key={acao.symbol} className="bg-white shadow-md rounded-xl p-4">
+              <h2 className="text-lg font-semibold">{acao.description}</h2>
+              <p className="text-gray-500">{acao.symbol}</p>
+              <p className="text-blue-600 font-bold">
+                {acao.currency === "BRL" ? "R$" : acao.currency}{" "}
+                {acao.currentPrice.toFixed(2)}
+              </p>
+
+              <div className="mt-2">
+                <label className="text-sm">Quantidade de cotas:</label>
                 <input
-                    placeholder="Filtrar por nome ou código da ação"
-                    value={filtro}
-                    onChange={(e: { target: { value: SetStateAction<string>; }; }) => setFiltro(e.target.value)}
-                    className="w-full md:w-80"
+                  type="number"
+                  min={0}
+                  value={cota}
+                  onChange={(e) => handleCotaChange(acao.symbol, e.target.value)}
+                  className="w-full mt-1 p-2 border rounded"
                 />
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Última atualização: {ultimaAtualizacao}
+                <button
+                  onClick={() => limparCota(acao.symbol)}
+                  className="text-red-500 text-sm mt-1 hover:underline"
+                >
+                  Limpar cota
+                </button>
+              </div>
+
+              <div className="mt-2 text-sm">
+                <p>
+                  Valor total:{" "}
+                  <strong>
+                    {acao.currency === "BRL" ? "R$" : acao.currency}{" "}
+                    {total.toFixed(2)}
+                  </strong>
                 </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {acoesFiltradas.map((acao) => {
-                    const precoAtual = acao.regularMarketPrice;
-                    const precoAnterior = acao.regularMarketPreviousClose;
-                    const variacao = precoAtual - precoAnterior;
-                    const variacaoPercentual = ((variacao / precoAnterior) * 100).toFixed(2);
-
-                    let cor = "text-gray-600 dark:text-gray-300";
-                    let Icone = Minus;
-
-                    if (variacao > 0) {
-                        cor = "text-green-600";
-                        Icone = ArrowUpRight;
-                    } else if (variacao < 0) {
-                        cor = "text-red-600";
-                        Icone = ArrowDownRight;
+                <p>
+                  Ganho/Perda:{" "}
+                  <strong
+                    className={
+                      ganhoPerda >= 0 ? "text-green-600" : "text-red-600"
                     }
-
-                    return (
-                        <Card key={acao.symbol} className="rounded-2xl shadow-md">
-                            <CardContent className="p-4">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-lg font-bold dark:text-white">{acao.longName}</h2>
-                                    <span className={`ml-2 ${cor}`}>
-                                        <Icone className="w-5 h-5" />
-                                    </span>
-                                </div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">{acao.symbol}</p>
-                                <p className={`text-xl font-semibold mt-2 ${cor}`}>
-                                    {acao.currency} {precoAtual.toFixed(2)}
-                                </p>
-                                <p className={`text-sm mt-1 ${cor}`}>
-                                    {variacao > 0 ? "+" : ""}
-                                    {variacao.toFixed(2)} ({variacaoPercentual}%)
-                                </p>
-
-                                {acao.sparkline && (
-                                    <div className="mt-3">
-                                        <Sparklines data={acao.sparkline} limit={15} height={30}>
-                                            <SparklinesLine color={cor.includes("green") ? "green" : cor.includes("red") ? "red" : "gray"} />
-                                        </Sparklines>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    );
-                })}
+                  >
+                    {acao.currency === "BRL" ? "R$" : acao.currency}{" "}
+                    {ganhoPerda.toFixed(2)}
+                  </strong>
+                </p>
+              </div>
             </div>
-        </div>
-    );
+          );
+        })}
+      </div>
+    </div>
+  );
 }
