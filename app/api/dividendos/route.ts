@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
 
-const acoes = ["PETR4.SA", "VALE3.SA", "ITUB4.SA"]; // ajuste seus símbolos aqui
+const acoes = ["PETR4.SA", "VALE3.SA", "ITUB4.SA"]; // Ajuste conforme necessário
 
 export async function GET() {
   try {
@@ -12,17 +12,24 @@ export async function GET() {
     const resultado: Record<string, { date: string; amount: number }[]> = {};
 
     for (const symbol of acoes) {
-      const dividends = await yahooFinance.dividends(symbol, {
-        period1: umAnoAtras.toISOString(),
-        period2: hoje.toISOString(),
-      });
+      try {
+        const dividends = await yahooFinance.dividends(symbol, {
+          period1: umAnoAtras.toISOString(),
+          period2: hoje.toISOString(),
+        });
 
-      if (Array.isArray(dividends) && dividends.length > 0) {
+        if (!dividends || !Array.isArray(dividends) || dividends.length === 0) {
+          resultado[symbol.replace(".SA", "")] = [];
+          continue;
+        }
+
         resultado[symbol.replace(".SA", "")] = dividends.map((d) => ({
           date: d.date.toISOString().split("T")[0],
           amount: d.amount,
         }));
-      } else {
+      } catch (error) {
+        // Se der erro em uma ação específica, continua com as outras
+        console.warn(`Erro ao buscar dividendos de ${symbol}:`, error);
         resultado[symbol.replace(".SA", "")] = [];
       }
     }
@@ -30,6 +37,9 @@ export async function GET() {
     return NextResponse.json(resultado);
   } catch (error) {
     console.error("Erro ao buscar dividendos:", error);
-    return NextResponse.json({ error: "Erro ao buscar dividendos" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro ao buscar dividendos" },
+      { status: 500 }
+    );
   }
 }

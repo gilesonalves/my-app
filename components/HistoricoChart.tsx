@@ -23,23 +23,23 @@ export default function HistoricoChart() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function fetchHistorico() {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/historico?symbol=${symbol}&period=${period}`);
-      if (!res.ok) throw new Error("Erro ao buscar histórico");
-      const data = await res.json();
-      setPrices(data.prices);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
+    async function fetchHistorico() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/historico?symbol=${symbol}&period=${period}`);
+        if (!res.ok) throw new Error("Erro ao buscar histórico");
+        const data = await res.json();
+        setPrices(data.prices);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
     fetchHistorico();
   }, [symbol, period]);
 
