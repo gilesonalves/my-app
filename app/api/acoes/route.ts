@@ -11,21 +11,33 @@ interface Acao {
 
 const symbols = ["PETR4.SA", "TAEE4.SA", "ITSA4.SA", "BBAS3.SA", "MXRF11.SA", "HGLG11.SA"];
 
-export async function GET() {
-  try {
-    const results: Acao[] = [];
+let cache: { timestamp: number; data: Acao[] } | null = null;
+const CACHE_TTL = 1000 * 60 * 2; // 2 minutos
 
-    for (const symbol of symbols) {
+export async function GET() {
+  if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
+    return NextResponse.json(cache.data);
+  }
+
+  try {
+    const promises = symbols.map(async (symbol) => {
       const quote = await yahooFinance.quote(symbol);
 
-      results.push({
+      return {
         symbol: symbol.replace(".SA", ""),
-        description: quote.longName || quote.shortName || symbol,
-        currentPrice: quote.regularMarketPrice || 0,
-        previousClose: quote.regularMarketPreviousClose || 0,
-        currency: quote.currency || "BRL",
-      });
-    }
+        description: quote?.longName || quote?.shortName || symbol,
+        currentPrice: quote?.regularMarketPrice ?? 0,
+        previousClose: quote?.regularMarketPreviousClose ?? 0,
+        currency: quote?.currency || "BRL",
+      };
+    });
+
+    const results = await Promise.all(promises);
+
+    cache = {
+      timestamp: Date.now(),
+      data: results,
+    };
 
     return NextResponse.json(results);
   } catch (error) {
