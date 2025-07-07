@@ -14,6 +14,31 @@ type CotasSalvas = {
   [symbol: string]: number;
 };
 
+type ResumoInvestimentoProps = {
+  totalInvestido: number;
+  valorAtual: number;
+};
+
+function ResumoInvestimento({ totalInvestido, valorAtual }: ResumoInvestimentoProps) {
+  const ganho = valorAtual - totalInvestido;
+  const ganhoPositivo = ganho >= 0;
+
+  return (
+    <section className="p-4 border rounded bg-white shadow-md max-w-md mx-auto my-6">
+      <h2 className="text-2xl font-bold mb-4 text-center">Resumo do Investimento</h2>
+      <p className="text-lg mb-2">
+        <strong>Total Investido:</strong> R$ {totalInvestido.toFixed(2)}
+      </p>
+      <p className="text-lg mb-2">
+        <strong>Valor Atual do Portfólio:</strong> R$ {valorAtual.toFixed(2)}
+      </p>
+      <p className={ganhoPositivo ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+        <strong>Ganho / Perda:</strong> R$ {ganho.toFixed(2)}
+      </p>
+    </section>
+  );
+}
+
 export default function AcoesCard() {
   const [acoes, setAcoes] = useState<Acao[]>([]);
   const [cotas, setCotas] = useState<CotasSalvas>({});
@@ -66,6 +91,19 @@ export default function AcoesCard() {
   if (carregando) return <p>Carregando ações...</p>;
   if (erro) return <p className="text-red-600">{erro}</p>;
 
+  // Calcular totais para o resumo
+  const totalInvestido = Object.entries(cotas).reduce((acc, [symbol, qtd]) => {
+    const acao = acoes.find((a) => a.symbol === symbol);
+    if (!acao) return acc;
+    return acc + qtd * acao.previousClose;
+  }, 0);
+
+  const valorAtual = Object.entries(cotas).reduce((acc, [symbol, qtd]) => {
+    const acao = acoes.find((a) => a.symbol === symbol);
+    if (!acao) return acc;
+    return acc + qtd * acao.currentPrice;
+  }, 0);
+
   return (
     <div className="p-4">
       <button
@@ -74,6 +112,8 @@ export default function AcoesCard() {
       >
         Atualizar Ações
       </button>
+
+      <ResumoInvestimento totalInvestido={totalInvestido} valorAtual={valorAtual} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {acoes.map((acao) => {
@@ -87,8 +127,7 @@ export default function AcoesCard() {
               <h2 className="text-lg font-semibold">{acao.description}</h2>
               <p className="text-gray-500">{acao.symbol}</p>
               <p className="text-blue-600 font-bold">
-                {acao.currency === "BRL" ? "R$" : acao.currency}{" "}
-                {acao.currentPrice.toFixed(2)}
+                {acao.currency === "BRL" ? "R$" : acao.currency} {acao.currentPrice.toFixed(2)}
               </p>
 
               <div className="mt-2">
@@ -112,19 +151,13 @@ export default function AcoesCard() {
                 <p>
                   Valor total:{" "}
                   <strong>
-                    {acao.currency === "BRL" ? "R$" : acao.currency}{" "}
-                    {total.toFixed(2)}
+                    {acao.currency === "BRL" ? "R$" : acao.currency} {total.toFixed(2)}
                   </strong>
                 </p>
                 <p>
                   Ganho/Perda:{" "}
-                  <strong
-                    className={
-                      ganhoPerda >= 0 ? "text-green-600" : "text-red-600"
-                    }
-                  >
-                    {acao.currency === "BRL" ? "R$" : acao.currency}{" "}
-                    {ganhoPerda.toFixed(2)}
+                  <strong className={ganhoPerda >= 0 ? "text-green-600" : "text-red-600"}>
+                    {acao.currency === "BRL" ? "R$" : acao.currency} {ganhoPerda.toFixed(2)}
                   </strong>
                 </p>
               </div>
