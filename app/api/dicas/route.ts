@@ -1,154 +1,54 @@
-// import { NextResponse } from "next/server";
-// import yahooFinance from "yahoo-finance2";
+import { NextResponse } from "next/server";
+import yahooFinance from "yahoo-finance2";
 
-// interface Dividendo {
-//   amount: number;
-//   date: string | Date;
-// }
+type Resultado = {
+  simbolo: string;
+  desempenho: number;
+  recomendacao: string;
+};
 
-// interface HistoricalEvent {
-//   type: string;
-//   dividends?: number;
-//   amount?: number;
-//   date: string | Date;
-//   [key: string]: unknown;
-// }
+const simbolosAcoes = ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"];
+const simbolosFiis = ["BCFF11.SA", "HGLG11.SA", "MXRF11.SA", "VISC11.SA"];
 
-// type Resultado = {
-//   ticker: string;
-//   desempenho: string;
-//   dividendos: string;
-//   recomendacao: string;
-// };
+async function calcularDesempenho(symbol: string): Promise<Resultado> {
+  try {
+    const hoje = new Date();
+    const umMesAtras = new Date();
+    umMesAtras.setMonth(hoje.getMonth() - 1);
 
-// const acoes = ["PETR4.SA", "TAEE4.SA", "ITSA4.SA"];
-// const fiis = ["MXRF11.SA", "HGLG11.SA"];
+    const historico = await yahooFinance.historical(symbol, {
+      period1: umMesAtras,
+      period2: hoje,
+    });
 
-// export async function GET() {
-//   try {
-//     const hoje = new Date();
-//     const umMesAtras = new Date();
-//     umMesAtras.setMonth(hoje.getMonth() - 1);
+    if (!historico || historico.length === 0) {
+      return { simbolo: symbol, desempenho: 0, recomendacao: "Sem dados" };
+    }
 
-//     const resultadosAcoes: Resultado[] = [];
-//     const resultadosFiis: Resultado[] = [];
-//     let totalDividendos = 0;
+    const precoInicial = historico[0].close;
+    const precoFinal = historico[historico.length - 1].close;
+    const desempenho = ((precoFinal - precoInicial) / precoInicial) * 100;
 
-//     function filtrarDividendosUltimoMes(dividends: Dividendo[]) {
-//       return dividends.filter((div) => {
-//         const dataDiv = new Date(div.date);
-//         return dataDiv >= umMesAtras && dataDiv <= hoje;
-//       });
-//     }
+    let recomendacao = "Manter";
+    if (desempenho > 5) recomendacao = "Comprar";
+    else if (desempenho < -5) recomendacao = "Vender";
 
-//     async function obterDividendos(
-//       symbol: string,
-//       period1: string,
-//       period2: string
-//     ): Promise<Dividendo[]> {
-//       try {
-//         const res = await yahooFinance.historical(symbol, {
-//           period1: new Date(period1),
-//           period2: new Date(period2),
-//           events: "dividends",
-//         }) as Array<Partial<HistoricalEvent>>;
+    return {
+      simbolo: symbol,
+      desempenho: Number(desempenho.toFixed(2)),
+      recomendacao,
+    };
+  } catch {
+    return { simbolo: symbol, desempenho: 0, recomendacao: "Erro ao analisar" };
+  }
+}
 
-//         if (!res) return [];
+export async function GET() {
+  const resultadosAcoes = await Promise.all(simbolosAcoes.map(calcularDesempenho));
+  const resultadosFiis = await Promise.all(simbolosFiis.map(calcularDesempenho));
 
-//         const dividends = res.filter(
-//           (item) => item.type === "DIVIDEND" || item.dividends !== undefined
-//         );
-
-//         return dividends
-//           .filter((d) => d.date !== undefined)
-//           .map((d) => ({
-//             amount: d.dividends ?? d.amount ?? 0,
-//             date: d.date as string | Date,
-//           }));
-//       } catch {
-//         return [];
-//       }
-//     }
-
-//     for (const symbol of acoes) {
-//       const history = await yahooFinance.historical(symbol, {
-//         period1: umMesAtras,
-//         period2: hoje,
-//       });
-
-//       const allDividends = await obterDividendos(
-//         symbol,
-//         umMesAtras.toISOString(),
-//         hoje.toISOString()
-//       );
-//       const dividends = filtrarDividendosUltimoMes(allDividends);
-
-//       const precoInicial = history?.length ? history[0].close : 0;
-//       const precoFinal = history?.length ? history[history.length - 1].close : 0;
-//       const variacao =
-//         precoInicial > 0 ? ((precoFinal - precoInicial) / precoInicial) * 100 : 0;
-
-//       const dividendosPagos =
-//         dividends.length > 0
-//           ? dividends.reduce((soma, item) => soma + (item.amount || 0), 0)
-//           : 0;
-
-//       totalDividendos += dividendosPagos;
-
-//       resultadosAcoes.push({
-//         ticker: symbol.replace(".SA", ""),
-//         desempenho: variacao.toFixed(2),
-//         dividendos: dividendosPagos.toFixed(2),
-//         recomendacao:
-//           dividendosPagos > 0
-//             ? "Recebeu dividendos no último mês. Potencial para valor e renda."
-//             : "Sem dividendos recentes. Avalie o histórico antes de aportar.",
-//       });
-//     }
-
-//     for (const symbol of fiis) {
-//       const history = await yahooFinance.historical(symbol, {
-//         period1: umMesAtras,
-//         period2: hoje,
-//       });
-
-//       const allDividends = await obterDividendos(
-//         symbol,
-//         umMesAtras.toISOString(),
-//         hoje.toISOString()
-//       );
-//       const dividends = filtrarDividendosUltimoMes(allDividends);
-
-//       const precoInicial = history?.length ? history[0].close : 0;
-//       const precoFinal = history?.length ? history[history.length - 1].close : 0;
-//       const variacao =
-//         precoInicial > 0 ? ((precoFinal - precoInicial) / precoInicial) * 100 : 0;
-
-//       const dividendosPagos =
-//         dividends.length > 0
-//           ? dividends.reduce((soma, item) => soma + (item.amount || 0), 0)
-//           : 0;
-
-//       totalDividendos += dividendosPagos;
-
-//       resultadosFiis.push({
-//         ticker: symbol.replace(".SA", ""),
-//         desempenho: variacao.toFixed(2),
-//         dividendos: dividendosPagos.toFixed(2),
-//         recomendacao:
-//           dividendosPagos > 0
-//             ? "Recebeu dividendos no último mês. Ideal para renda passiva."
-//             : "Sem dividendos recentes.",
-//       });
-//     }
-
-//     return NextResponse.json({
-//       acoes: resultadosAcoes,
-//       fiis: resultadosFiis,
-//       totalDividendos: totalDividendos.toFixed(2),
-//     });
-//   } catch (error) {
-//     console.error("Erro ao buscar dicas:", error);
-//     return NextResponse.json({ error: "Erro ao buscar dicas" }, { status: 500 });
-//   }
-// }
+  return NextResponse.json({
+    acoes: resultadosAcoes,
+    fiis: resultadosFiis,
+  });
+}
