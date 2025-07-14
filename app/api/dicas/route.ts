@@ -14,6 +14,13 @@ interface HistoricalEvent {
   [key: string]: unknown;
 }
 
+type Resultado = {
+  ticker: string;
+  desempenho: string;
+  dividendos: string;
+  recomendacao: string;
+};
+
 const acoes = ["PETR4.SA", "TAEE4.SA", "ITSA4.SA"];
 const fiis = ["MXRF11.SA", "HGLG11.SA"];
 
@@ -23,8 +30,8 @@ export async function GET() {
     const umMesAtras = new Date();
     umMesAtras.setMonth(hoje.getMonth() - 1);
 
-    const resultadosAcoes = [];
-    const resultadosFiis = [];
+    const resultadosAcoes: Resultado[] = [];
+    const resultadosFiis: Resultado[] = [];
     let totalDividendos = 0;
 
     function filtrarDividendosUltimoMes(dividends: Dividendo[]) {
@@ -40,11 +47,11 @@ export async function GET() {
       period2: string
     ): Promise<Dividendo[]> {
       try {
-        const res: HistoricalEvent[] = await yahooFinance.historical(symbol, {
+        const res = await yahooFinance.historical(symbol, {
           period1: new Date(period1),
           period2: new Date(period2),
-          events: ["div"],
-        });
+          events: "dividends",
+        }) as Array<Partial<HistoricalEvent>>;
 
         if (!res) return [];
 
@@ -52,10 +59,12 @@ export async function GET() {
           (item) => item.type === "DIVIDEND" || item.dividends !== undefined
         );
 
-        return dividends.map((d) => ({
-          amount: d.dividends ?? d.amount ?? 0,
-          date: d.date,
-        }));
+        return dividends
+          .filter((d) => d.date !== undefined)
+          .map((d) => ({
+            amount: d.dividends ?? d.amount ?? 0,
+            date: d.date as string | Date,
+          }));
       } catch {
         return [];
       }
